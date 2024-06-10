@@ -109,9 +109,12 @@ convert_loop:
     jmp convert_loop
 
 conversion_done:
+    mov rbx, 64
+    sub rbx, rcx
+    mov cl, bl
+    shl rax, cl
     mov [crc_poly_num], rax    ; Zapisz wynik do zmiennej
-    print "", rcx
-
+    print "", rax
 
     ; Otwórz plik
     mov rax, 2                 ; sys_open
