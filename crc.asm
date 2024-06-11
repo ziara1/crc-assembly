@@ -66,11 +66,18 @@
 
 
 
+
+
+
+
+
+
 section .bss
     buffer resb 4096           ; Bufor o rozmiarze 4096 bajtów
     crc_poly_num resq 1        ; Miejsce na przekształcony wielomian CRC
 
 section .data
+    crcTable times 256 dq 0         ; Tablica 256 elementów 64-bitowych wypełniona zerami
     err_msg db 'Error', 10     ; Komunikat o błędzie zakończony nowym wierszem
     err_msg_len equ $ - err_msg
 
@@ -84,6 +91,7 @@ _start:
     mov rdx, [rsp+24]          ; argv[2] (wielomian CRC)
 
     ; Sprawdź, czy wszystkie argumenty są podane
+    ; moze test rsp 3 jeszcze nwm
     test rsi, rsi
     jz error_exit
     test rdx, rdx
@@ -114,7 +122,49 @@ conversion_done:
     mov cl, bl
     shl rax, cl
     mov [crc_poly_num], rax    ; Zapisz wynik do zmiennej
-    print "", rax
+
+
+
+crcInit:
+    mov rcx, [rel crc_poly_num]   ; POLYNOMIAL
+    mov r8, 0x8000000000000000
+
+    ; Dla każdego możliwego dividend (0-255)
+    xor rdi, rdi                ; dividend = 0
+
+crcLoop:
+    mov eax, edi                ; eax = dividend (tylko dolne 32 bity nas interesują)
+    shl rax, 56                 ; remainder = dividend << (WIDTH - 8)
+    mov rbx, rax                ; Przenieś remainder do rbx
+    mov rdx, 8
+
+    ; Dla każdego bitu (od 8 do 0)
+bitLoop:
+    test rbx, r8            ; Sprawdź, czy TOPBIT jest ustawiony
+    jz noDivision
+
+    ; Jeśli TOPBIT jest ustawiony
+    shl rbx, 1                  ; remainder = remainder << 1
+    xor rbx, rcx                ; remainder = remainder ^ POLYNOMIAL
+    jmp nextBit
+
+noDivision:
+    ; Jeśli TOPBIT nie jest ustawiony
+    shl rbx, 1                  ; remainder = remainder << 1
+
+nextBit:
+    sub dl, 1                   ; bit--
+    jnz bitLoop
+
+    ; Przechowaj wynik w crcTable
+    mov [crcTable + rdi*8], rbx ; crcTable[dividend] = remainder
+
+    ; Następny dividend
+    inc edi                     ; dividend++
+    cmp edi, 256                ; Sprawdź, czy dividend < 256
+    jl crcLoop
+
+
 
     ; Otwórz plik
     mov rax, 2                 ; sys_open
@@ -124,6 +174,7 @@ conversion_done:
     test rax, rax
     js error_exit
     mov rdi, rax               ; Zapisz deskryptor pliku
+
 
 
     ; Odczytuj zawartość pliku do bufora
@@ -136,9 +187,15 @@ read_loop:
     js close_and_exit          ; Wystąpił błąd
     test rax, rax
     jz close_and_exit          ; Koniec pliku
+
+    
     ; (Tutaj przetworz dane z bufora)
 
     jmp read_loop              ; Kontynuuj odczyt
+
+
+
+
 
 close_and_exit:
     ; Zamknij plik
@@ -165,3 +222,4 @@ exit:
     mov rax, 60                ; sys_exit
     xor rdi, rdi               ; Kod wyjścia: 0
     syscall
+
