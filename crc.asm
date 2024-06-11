@@ -192,6 +192,7 @@ read_fragment:
     ; Przetwórz długość fragmentu (little-endian)
     movzx r8, word [length]    ; Przechowuje długość fragmentu w r8
 
+
 process_data:
     ; Sprawdź, czy długość fragmentu jest większa niż bufor
     cmp r8, 4096
