@@ -75,6 +75,8 @@
 section .bss
     buffer resb 4096           ; Bufor o rozmiarze 4096 bajtów
     crc_poly_num resq 1        ; Miejsce na przekształcony wielomian CRC
+    length resw 1           ; Przechowuje długość fragmentu (2 bajty)
+    offset resd 1           ; Przechowuje przesunięcie fragmentu (4 bajty)
 
 section .data
     crcTable times 256 dq 0         ; Tablica 256 elementów 64-bitowych wypełniona zerami
@@ -166,7 +168,6 @@ nextBit:
     jl crcLoop
 
 
-
     ; Otwórz plik
     mov rax, 2                 ; sys_open
     mov rdi, rsi               ; Nazwa pliku
@@ -177,22 +178,80 @@ nextBit:
     mov rdi, rax               ; Zapisz deskryptor pliku
 
 
-
-    ; Odczytuj zawartość pliku do bufora
-read_loop:
+read_fragment:
+    ; Wczytaj 2 bajty długości fragmentu
     mov rax, 0                 ; sys_read
-    mov rsi, buffer            ; Bufor
-    mov rdx, 4096              ; Rozmiar bufora
+    mov rsi, length            ; Bufor na długość fragmentu (2 bajty)
+    mov rdx, 2                 ; Wczytaj 2 bajty
     syscall
     test rax, rax
     js close_and_exit          ; Wystąpił błąd
     test rax, rax
     jz close_and_exit          ; Koniec pliku
 
-    
+    ; Przetwórz długość fragmentu (little-endian)
+    movzx r8, word [length]    ; Przechowuje długość fragmentu w r8
+
+process_data:
+    ; Sprawdź, czy długość fragmentu jest większa niż bufor
+    cmp r8, 4096
+    jbe .read_data             ; Jeśli długość <= 4096, wczytaj dane
+    ; Wczytuj dane w partiach po 4096 bajtów
+.read_chunk:
+    mov rax, 0                 ; sys_read
+    mov rsi, buffer            ; Bufor 4096 bajtowy
+    mov rdx, 4096              ; Wczytaj 4096 bajtów
+    syscall
+    test rax, rax
+    js close_and_exit          ; Wystąpił błąd
+    test rax, rax
+    jz close_and_exit          ; Koniec pliku
+    ; (Tutaj przetworz dane z bufora)
+    sub r8, rax                ; Zmniejsz pozostałą długość fragmentu
+    jmp process_data           ; Kontynuuj przetwarzanie danych
+
+.read_data:
+    mov rax, 0                 ; sys_read
+    mov rsi, buffer            ; Bufor 4096 bajtowy
+    mov rdx, r8                ; Wczytaj pozostałe dane fragmentu
+    syscall
+    test rax, rax
+    js close_and_exit          ; Wystąpił błąd
+    test rax, rax
+    jz close_and_exit          ; Koniec pliku
     ; (Tutaj przetworz dane z bufora)
 
-    jmp read_loop              ; Kontynuuj odczyt
+    ; Wczytaj 4 bajty przesunięcia fragmentu
+    mov rax, 0                 ; sys_read
+    mov rsi, offset            ; Bufor na przesunięcie fragmentu (4 bajty)
+    mov rdx, 4                 ; Wczytaj 4 bajty
+    syscall
+    test rax, rax
+    js close_and_exit          ; Wystąpił błąd
+    test rax, rax
+    jz close_and_exit          ; Koniec pliku
+
+; Przetwórz przesunięcie fragmentu (little-endian, signed)
+    movsxd rax, dword [offset] ; Przenosi i rozszerza znak 32-bitowego offsetu do 64-bitowego rejestru
+
+    ; Sprawdź, czy przesunięcie wskazuje na początek fragmentu
+   movzx r8, word [length]    ; Przechowuje długość fragmentu w r8
+   add r8, 6
+   neg r8
+   sub r8, rax
+   test r8, r8
+   jz close_and_exit
+
+    ; Przesuń wskaźnik pliku o wartość przesunięcia
+    mov rdx, rax               ; Przesunięcie
+    mov rax, 8                 ; sys_lseek
+    mov rsi, rdx               ; Przesunięcie
+    mov rdx, 1                 ; SEEK_CUR
+    syscall
+    test rax, rax
+    js close_and_exit          ; Wystąpił błąd
+
+    jmp read_fragment          ; Wczytaj kolejny fragment
 
 
 
@@ -224,3 +283,32 @@ exit:
     xor rdi, rdi               ; Kod wyjścia: 0
     syscall
 
+
+
+
+    ; jesli jest 1 bajt to go zapamietaj
+    ; zrobic etykiete nowy fragment
+    ; a w etykiecie process_buffer sprawdzac rejestry, czy np 
+    ; zostalo do przetworzenia przesuniecie, czy dlugosc, czy bajty
+    ; zrobic rejestry na poczatek fragmentu
+    ; na checksum, na dlugosc fragmentu i na przesuniecie
+    ; tym od poczatku fragmentu wyznaczamy odkad iterowac
+    ; i mamy iterator zeby isc az do konca fragmentu
+    ; jesli sie nie miescie fragment to zobaczmy czy poczatek - dl + 4 > 4096 
+    ; czy cos takiego albo policzyc to zeby wiedziec ile trzeba bajtow wczytac jeszcze
+    ; a jesli nie miesci sie dlugosc to po prostu zapamietujemy 1 bajt i 2 i na luzie
+    ; rejestry rax rdx  rsi  r8 r9 r10  rbx 
+
+    ; dobra sposob karola
+    ; wczytuje 2 bajty do bufora
+    ; wczytuje teraz na maksa az nie wczytam wszystkich
+    ; czyli jakas zmienna ktora liczy ile jeszcze zostalo 
+    ; na koniec wczytuje ofset i o tyle przesuwam
+    ; czyli rejestr na 
+    ; adres poczatku
+    ; dlugosc
+    ; ofset ale to juz mozna ktorys uzyc
+    ; ile zostalo do konca
+    ; iterator
+
+    ; zmienia sie rcx i r11
