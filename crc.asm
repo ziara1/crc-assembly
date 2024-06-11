@@ -157,6 +157,7 @@ nextBit:
     jnz bitLoop
 
     ; Przechowaj wynik w crcTable
+    ;print "", rbx
     mov [crcTable + rdi*8], rbx ; crcTable[dividend] = remainder
 
     ; Następny dividend
