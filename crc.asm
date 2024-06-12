@@ -151,8 +151,8 @@ process_data:
     cmp rbx, rax
     jge .done1
     movzx r10, byte [rsi + rbx] ; ładuje message[byte] do r10, rozszerza do 64 bitów
-    mov r11, r9                 ; Przenieś remainder do r11
-    shr r11, 56                 ; Przesuń remainder w prawo o (64 - 8) bitów
+    mov r11, r9                 ; przenosi remainder do r11
+    shr r11, 56                 ; przesuwa remainder w prawo o (64 - 8) bitów
     xor r10, r11                ; data = message[byte] ^ (remainder >> 56)
 
     ; remainder = crcTable[data] ^ (remainder << 8);
@@ -209,7 +209,7 @@ process_data:
     movsxd rax, dword [offset]  ; przenosi i rozszerza znak 32-bitowego offsetu do 64-bitowego rejestru
 
     ; sprawdza, czy przesunięcie wskazuje na początek fragmentu
-    movzx r8, word [length]     ; Przechowuje długość fragmentu w r8
+    movzx r8, word [length]     ; przechowuje długość fragmentu w r8
     add r8, 6
     neg r8
     sub r8, rax
@@ -244,15 +244,15 @@ exit:
     sub rcx, [dlugoscwyniku]
     
 .next_bit:
-    dec rbx                     ; zmniejsz licznik bitów
-    mov rax, r9                 ; przenieś crc do rax
-    shr rax, cl                 ; przesuń bity w prawo o wartość cl
+    dec rbx                     ; zmniejsza licznik bitów
+    mov rax, r9                 ; przenosi crc do rax
+    shr rax, cl                 ; przesuwa bity w prawo o wartość cl
     inc rcx
     and rax, 1                  ; wyizoluj najniższy bit
     add rax, '0'                ; zamień bit na znak '0' lub '1'
     mov [rdi + rbx], al         ; zapisz znak do bufora
-    test rbx, rbx               ; sprawdź, czy rcx jest zerem
-    jnz .next_bit               ; jeśli nie jest zerem, kontynuuj
+    test rbx, rbx               ; sprawdza, czy rcx jest zerem
+    jnz .next_bit               ; jeśli nie jest zerem, kontynuuje
     
     ; wywołanie sys_write, aby wypisać wynik na standardowe wyjście
     mov rax, 10
