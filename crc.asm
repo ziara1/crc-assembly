@@ -68,20 +68,12 @@
 
 
 
-
-
-
-
 section .bss
     buffer resb 4096           ; Bufor o rozmiarze 4096 bajtów
     crc_poly_num resq 1        ; Miejsce na przekształcony wielomian CRC
     length resw 1           ; Przechowuje długość fragmentu (2 bajty)
     offset resd 1           ; Przechowuje przesunięcie fragmentu (4 bajty)
-
     output resb 65 ; maksymalnie 64 bity + null terminator
-
-
-
 
 section .data
     crcTable times 256 dq 0         ; Tablica 256 elementów 64-bitowych wypełniona zerami
@@ -193,9 +185,9 @@ read_fragment:
     mov rdx, 2                 ; Wczytaj 2 bajty
     syscall
     test rax, rax
-    js close_and_exit          ; Wystąpił błąd
+    js error_exit          ; Wystąpił błąd
     test rax, rax
-    jz close_and_exit          ; Koniec pliku
+    jz error_exit          ; Koniec pliku
 
     ; Przetwórz długość fragmentu (little-endian)
     movzx r8, word [length]    ; Przechowuje długość fragmentu w r8
@@ -214,9 +206,9 @@ process_data:
     mov rdx, 4096              ; Wczytaj 4096 bajtów
     syscall
     test rax, rax
-    js close_and_exit          ; Wystąpił błąd
+    js error_exit          ; Wystąpił błąd
     test rax, rax
-    jz close_and_exit          ; Koniec pliku
+    jz error_exit          ; Koniec pliku
 
     xor rbx, rbx
 .crc_loop1:
@@ -247,9 +239,9 @@ process_data:
 
     syscall
     test rax, rax
-    js close_and_exit          ; Wystąpił błąd
+    js error_exit          ; Wystąpił błąd
     test rax, rax
-    jz close_and_exit          ; Koniec pliku
+    jz error_exit          ; Koniec pliku
 
     xor rbx, rbx
 .crc_loop2:
@@ -280,20 +272,20 @@ process_data:
     mov rdx, 4                 ; Wczytaj 4 bajty
     syscall
     test rax, rax
-    js close_and_exit          ; Wystąpił błąd
+    js error_exit          ; Wystąpił błąd
     test rax, rax
-    jz close_and_exit          ; Koniec pliku
+    jz error_exit          ; Koniec pliku
 
 ; Przetwórz przesunięcie fragmentu (little-endian, signed)
     movsxd rax, dword [offset] ; Przenosi i rozszerza znak 32-bitowego offsetu do 64-bitowego rejestru
 
     ; Sprawdź, czy przesunięcie wskazuje na początek fragmentu
-   movzx r8, word [length]    ; Przechowuje długość fragmentu w r8
-   add r8, 6
-   neg r8
-   sub r8, rax
-   test r8, r8
-   jz close_and_exit
+    movzx r8, word [length]    ; Przechowuje długość fragmentu w r8
+    add r8, 6
+    neg r8
+    sub r8, rax
+    test r8, r8
+    jz close_and_exit
 
     ; Przesuń wskaźnik pliku o wartość przesunięcia
     mov rdx, rax               ; Przesunięcie
@@ -302,11 +294,9 @@ process_data:
     mov rdx, 1                 ; SEEK_CUR
     syscall
     test rax, rax
-    js close_and_exit          ; Wystąpił błąd
+    js error_exit          ; Wystąpił błąd
 
     jmp read_fragment          ; Wczytaj kolejny fragment
-
-
 
 
 
@@ -314,33 +304,16 @@ close_and_exit:
     ; Zamknij plik
     mov rax, 3                 ; sys_close
     syscall
-    jmp exit
+    ;jmp exit
 
-error_exit:
-    ; Wypisz komunikat o błędzie
-    mov rax, 1                 ; sys_write
-    mov rdi, 2                 ; Deskryptor pliku: stderr
-    mov rsi, err_msg
-    mov rdx, err_msg_len
-    syscall
-
-    ; Zamknij plik, jeśli otwarty
-    test rdi, rdi
-    jz exit                    ; Plik nie został otwarty
-    mov rax, 3                 ; sys_close
-    syscall
 
 exit:
     xor rcx, rcx
     mov cl, [dlugoscwyniku]
-    ;shr r9, cl
-
-
 
     ; zakładamy, że r9 ma wartość crc
     ; i cl zawiera liczbę bitów do wypisania
     
-    ;mov rcx, cl         ; przenieś wartość cl do rcx (liczba bitów)
     mov rdx, rcx        ; ustaw rdx jako licznik pozostałych bitów
     mov rbx, rcx
     lea rdi, [output]   ; rdi wskazuje na bufor wyjściowy
@@ -359,16 +332,14 @@ exit:
     jnz .next_bit       ; jeśli nie jest zerem, kontynuuj
     
     ; wywołanie sys_write, aby wypisać wynik na standardowe wyjście
-  mov rax, 10
-  mov [rdi + rdx], al
+    mov rax, 10
+    mov [rdi + rdx], al
     mov rax, 1          ; numer syscall dla sys_write
     mov rdi, 1          ; file descriptor 1 - stdout
     lea rsi, [output]   ; bufor danych
-  inc rdx
+    inc rdx
     mov rdx, rdx        ; liczba bajtów do wypisania (oryginalne rcx)
     syscall
-
-
 
     ; Zakończ program
     mov rax, 60                ; sys_exit
@@ -376,34 +347,14 @@ exit:
     syscall
 
 
+error_exit:
 
+    ; Zamknij plik, jeśli otwarty
+    test rdi, rdi
+    jz exit                    ; Plik nie został otwarty
+    mov rax, 3                 ; sys_close
+    syscall
 
-    ; jesli jest 1 bajt to go zapamietaj
-    ; zrobic etykiete nowy fragment
-    ; a w etykiecie process_buffer sprawdzac rejestry, czy np 
-    ; zostalo do przetworzenia przesuniecie, czy dlugosc, czy bajty
-    ; zrobic rejestry na poczatek fragmentu
-    ; na checksum, na dlugosc fragmentu i na przesuniecie
-    ; tym od poczatku fragmentu wyznaczamy odkad iterowac
-    ; i mamy iterator zeby isc az do konca fragmentu
-    ; jesli sie nie miescie fragment to zobaczmy czy poczatek - dl + 4 > 4096 
-    ; czy cos takiego albo policzyc to zeby wiedziec ile trzeba bajtow wczytac jeszcze
-    ; a jesli nie miesci sie dlugosc to po prostu zapamietujemy 1 bajt i 2 i na luzie
-    ; rejestry rax rdx  rsi  r8 r9 r10  rbx 
-
-    ; dobra sposob karola
-    ; wczytuje 2 bajty do bufora
-    ; wczytuje teraz na maksa az nie wczytam wszystkich
-    ; czyli jakas zmienna ktora liczy ile jeszcze zostalo 
-    ; na koniec wczytuje ofset i o tyle przesuwam
-    ; czyli rejestr na 
-    ; adres poczatku
-    ; dlugosc
-    ; ofset ale to juz mozna ktorys uzyc
-    ; ile zostalo do konca
-    ; iterator
-
-    ; zmienia sie rcx i r11
-    
-    ; rbx r10 r9
-    ;    print "", rbx
+    mov rax, 60                ; sys_exit
+    mov rdi, 1               ; Kod wyjścia: 0
+    syscall
