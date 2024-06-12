@@ -221,7 +221,7 @@ process_data:
     xor r10, r11           ; data = message[byte] ^ (remainder >> 56)
 
     ; remainder = crcTable[data] ^ (remainder << 8);
-    movzx r11, byte [crcTable + r10] ; Załaduj crcTable[data] do r11, rozszerzając do 64 bitów
+    mov r11, [crcTable + 8*r10] ; Załaduj crcTable[data] do r11, rozszerzając do 64 bitów
     shl r9, 8              ; Przesuń remainder w lewo o 8 bitów
     xor r9, r11            ; remainder = crcTable[data] ^ (remainder << 8)
 
@@ -251,13 +251,17 @@ process_data:
     mov r11, r9            ; Przenieś remainder do r11
     shr r11, 56            ; Przesuń remainder w prawo o (64 - 8) bitów
     xor r10, r11           ; data = message[byte] ^ (remainder >> 56)
+    print "data ", r10
+
 
     ; remainder = crcTable[data] ^ (remainder << 8);
-    movzx r11, byte [crcTable + r10] ; Załaduj crcTable[data] do r11, rozszerzając do 64 bitów
+    mov r11, [crcTable + 8*r10] ; Załaduj crcTable[data] do r11, rozszerzając do 64 bitów
+
     shl r9, 8              ; Przesuń remainder w lewo o 8 bitów
     xor r9, r11            ; remainder = crcTable[data] ^ (remainder << 8)
 
     inc rbx                ; Zwiększ indeks (byte)
+
     jmp .crc_loop2          ; Przejdź do następnego bajtu
 
 .done2:
@@ -320,6 +324,7 @@ error_exit:
     syscall
 
 exit:
+
     print "crc: ", r9
     ; Zakończ program
     mov rax, 60                ; sys_exit
