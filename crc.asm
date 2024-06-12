@@ -78,10 +78,17 @@ section .bss
     length resw 1           ; Przechowuje długość fragmentu (2 bajty)
     offset resd 1           ; Przechowuje przesunięcie fragmentu (4 bajty)
 
+    output resb 65 ; maksymalnie 64 bity + null terminator
+
+
+
+
 section .data
     crcTable times 256 dq 0         ; Tablica 256 elementów 64-bitowych wypełniona zerami
     err_msg db 'Error', 10     ; Komunikat o błędzie zakończony nowym wierszem
     err_msg_len equ $ - err_msg
+    dlugoscwyniku db 0
+
 
 section .text
     global _start
@@ -120,6 +127,7 @@ convert_loop:
 
 conversion_done:
     mov rbx, 64
+    mov [dlugoscwyniku], cl
     sub rbx, rcx
     mov cl, bl
     shl rax, cl
@@ -251,7 +259,6 @@ process_data:
     mov r11, r9            ; Przenieś remainder do r11
     shr r11, 56            ; Przesuń remainder w prawo o (64 - 8) bitów
     xor r10, r11           ; data = message[byte] ^ (remainder >> 56)
-    print "data ", r10
 
 
     ; remainder = crcTable[data] ^ (remainder << 8);
@@ -324,6 +331,42 @@ error_exit:
     syscall
 
 exit:
+    xor rcx, rcx
+    mov cl, [dlugoscwyniku]
+    ;shr r9, cl
+    print "dlugosc: ", rcx
+
+
+
+    ; zakładamy, że r9 ma wartość crc
+    ; i cl zawiera liczbę bitów do wypisania
+    
+    ;mov rcx, cl         ; przenieś wartość cl do rcx (liczba bitów)
+    mov rdx, rcx        ; ustaw rdx jako licznik pozostałych bitów
+    mov rbx, rcx
+    lea rdi, [output]   ; rdi wskazuje na bufor wyjściowy
+    mov rcx, 64
+    sub rcx, [dlugoscwyniku]
+    
+.next_bit:
+    dec rbx             ; zmniejsz licznik bitów
+    mov rax, r9        ; przenieś crc do rax
+    shr rax, cl         ; przesuń bity w prawo o wartość cl
+    inc rcx
+    and rax, 1          ; wyizoluj najniższy bit
+    add rax, '0'        ; zamień bit na znak '0' lub '1'
+    mov [rdi + rbx], al ; zapisz znak do bufora
+    test rbx, rbx       ; sprawdź, czy rcx jest zerem
+    jnz .next_bit       ; jeśli nie jest zerem, kontynuuj
+    
+    ; wywołanie sys_write, aby wypisać wynik na standardowe wyjście
+    mov rax, 1          ; numer syscall dla sys_write
+    mov rdi, 1          ; file descriptor 1 - stdout
+    lea rsi, [output]   ; bufor danych
+    mov rdx, rdx        ; liczba bajtów do wypisania (oryginalne rcx)
+    syscall
+
+
 
     print "crc: ", r9
     ; Zakończ program
