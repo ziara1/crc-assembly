@@ -334,7 +334,6 @@ exit:
     xor rcx, rcx
     mov cl, [dlugoscwyniku]
     ;shr r9, cl
-    print "dlugosc: ", rcx
 
 
 
@@ -360,15 +359,17 @@ exit:
     jnz .next_bit       ; jeśli nie jest zerem, kontynuuj
     
     ; wywołanie sys_write, aby wypisać wynik na standardowe wyjście
+  mov rax, 10
+  mov [rdi + rdx], al
     mov rax, 1          ; numer syscall dla sys_write
     mov rdi, 1          ; file descriptor 1 - stdout
     lea rsi, [output]   ; bufor danych
+  inc rdx
     mov rdx, rdx        ; liczba bajtów do wypisania (oryginalne rcx)
     syscall
 
 
 
-    print "crc: ", r9
     ; Zakończ program
     mov rax, 60                ; sys_exit
     xor rdi, rdi               ; Kod wyjścia: 0
