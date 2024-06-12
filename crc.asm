@@ -9,9 +9,9 @@ section .data
     crcTable times 256 dq 0     ; crc table 256 wartości w zależności od bajtu 
     dlugoscwyniku db 0          ; dlugosc ostatecznego wyniku
 
-
 section .text
     global _start
+
 
 _start:
     ; wczytuje parametry programu
@@ -62,11 +62,9 @@ _start:
     jmp .convert_loop           ; powtórz pętlę
 
 .done:
-
     mov [dlugoscwyniku], r8     ; zapisuje długość wielomianu
     shl rax, cl                 ; przesuwa wielomian na maksa w prawo
     mov [crc_poly], rax         ; zapisuje wielomian do zmiennej
-
 
 .crcInit:
     mov rcx, [rel crc_poly]     ; wielomian crc
@@ -105,7 +103,6 @@ _start:
     cmp edi, 256                ; sprawdź, czy dzielnik < 256
     jl .crcLoop
 
-
     ; otwiera plik
     mov rax, 2                  ; sys_open
     mov rdi, rsi                ; nazwa pliku
@@ -114,7 +111,6 @@ _start:
     test rax, rax
     js .error_exit
     mov rdi, rax                ; zapisuje deskryptor pliku
-
     xor r9, r9
 
 .read_fragment:
@@ -159,7 +155,6 @@ _start:
     mov r11, [crcTable + 8*r10] ; ładuje crcTable[data] do r11, rozszerzając do 64 bitów
     shl r9, 8                   ; przesuwa remainder w lewo o 8 bitów
     xor r9, r11                 ; remainder = crcTable[data] ^ (remainder << 8)
-
     inc rbx                     ; zwiększa indeks (byte)
     jmp .crc_loop1              ; przechodzi do następnego bajtu
 
@@ -180,6 +175,7 @@ _start:
 
     xor rbx, rbx
 .crc_loop2:
+    ; przetworzenie ostatniej partii "danych" danego fragmentu
     cmp rbx, rax
     jge .done2
     movzx r10, byte [rsi + rbx] ; ładuje message[byte] do r10, rozszerza do 64 bitów
@@ -191,7 +187,6 @@ _start:
     mov r11, [crcTable + 8*r10] ; ładuje crcTable[data] do r11, rozszerza do 64 bitów
     shl r9, 8                   ; przesuwa remainder w lewo o 8 bitów
     xor r9, r11                 ; remainder = crcTable[data] ^ (remainder << 8)
-
     inc rbx                     ; zwiększa indeks (byte)
     jmp .crc_loop2              ; przechodzi do następnego bajtu
 
@@ -224,15 +219,12 @@ _start:
     syscall
     test rax, rax
     js .error_exit              ; wystąpił błąd
-
     jmp .read_fragment          ; wczytuje kolejny fragment
-
 
 .close_and_exit:
     ; Zamknij plik
     mov rax, 3                  ; sys_close
     syscall
-
 
 .exit:
     xor rcx, rcx
@@ -268,7 +260,6 @@ _start:
     mov rax, 60                 ; sys_exit
     xor rdi, rdi                
     syscall
-
 
 .error_exit:
 
