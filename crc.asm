@@ -59,8 +59,6 @@
 
 
 
-
-
 section .bss
     buffer resb 4096            ; Bufor o rozmiarze 4096 bajtów
     crc_poly resq 1             ; przekształcony wielomian CRC
@@ -87,31 +85,6 @@ _start:
     jz error_exit
     test rdx, rdx
     jz error_exit
-
-
-
-
-;                                ; konwertuje wielomian CRC do liczby
-;    mov rbx, rdx                ; ustawia wskaźnik na początek stringa
-;    xor rax, rax                ; miejsce na wynik
-;    xor rcx, rcx                ; do przesunięć
-
-
-;convert_loop:
-;    mov dl, byte [rbx]
-;    test dl, dl
-;    jz conversion_done          ; koniec stringa
-;    sub dl, '0'
-;    jb error_exit               ; niepoprawny znak
-;    cmp dl, 1
-;    ja error_exit               ; niepoprawny znak
-;    shl rax, 1                  ; przesuwa wynik w lewo o 1 bit
-;    or rax, rdx
-;    inc rbx
-;    inc cl
-;    jmp convert_loop
-
-
 
     xor rbx, rbx
     xor rax, rax                ; wyzeruj rejestr rax, który będzie zawierał wynikowy ciąg binarny
@@ -149,20 +122,10 @@ next_char:
     jmp convert_loop            ; powtórz pętlę
 
 done:
-    ; rax zawiera wynikowy ciąg binarny
-    ; tutaj możesz umieścić kod kończący program, np. wywołanie systemowe exit
-    ;print "wielomian przed ", rax
-    ;print "rcx ", rcx ;= 64 - dlugosc
-    ;print "r8 ", r8
 
-
-
-conversion_done:
     mov [dlugoscwyniku], r8
-    ;print "wielomian przed ", rax
     shl rax, cl
     mov [crc_poly], rax         ; zapisuje wielomian do zmiennej
-    ;print "wielomian ", rax
 
 
 crcInit:
@@ -229,7 +192,6 @@ read_fragment:
 
     ; Przetwórz długość fragmentu (little-endian)
     movzx r8, word [length]     ; przechowuje długość fragmentu w r8
-    ;print "dlugosc fragmentu ", r8
 
 process_data:
     ; Sprawdź, czy długość fragmentu jest większa niż bufor
@@ -254,7 +216,6 @@ process_data:
     cmp rbx, rax
     jge .done1
     movzx r10, byte [rsi + rbx] ; Załaduj message[byte] do r10, rozszerzając do 64 bitów
-    ;print "bajt ", r10
     mov r11, r9                 ; Przenieś remainder do r11
     shr r11, 56                 ; Przesuń remainder w prawo o (64 - 8) bitów
     xor r10, r11                ; data = message[byte] ^ (remainder >> 56)
@@ -287,7 +248,6 @@ process_data:
     cmp rbx, rax
     jge .done2
     movzx r10, byte [rsi + rbx] ; Załaduj message[byte] do r10, rozszerzając do 64 bitów
-    ;print "2bajt ", r10
     mov r11, r9                 ; Przenieś remainder do r11
     shr r11, 56                 ; Przesuń remainder w prawo o (64 - 8) bitów
     xor r10, r11                ; data = message[byte] ^ (remainder >> 56)
@@ -302,7 +262,6 @@ process_data:
 
 .done2:
 
-
     ; Wczytaj 4 bajty przesunięcia fragmentu
     mov rax, 0                  ; sys_read
     mov rsi, offset             ; Bufor na przesunięcie fragmentu (4 bajty)
@@ -315,7 +274,6 @@ process_data:
 
 ; Przetwórz przesunięcie fragmentu (little-endian, signed)
     movsxd rax, dword [offset]  ; Przenosi i rozszerza znak 32-bitowego offsetu do 64-bitowego rejestru
-    ;print "ofset ", rax
 
     ; Sprawdź, czy przesunięcie wskazuje na początek fragmentu
     movzx r8, word [length]     ; Przechowuje długość fragmentu w r8
@@ -335,7 +293,6 @@ process_data:
     js error_exit               ; Wystąpił błąd
 
     jmp read_fragment           ; Wczytaj kolejny fragment
-
 
 
 close_and_exit:
@@ -395,3 +352,5 @@ error_exit:
     mov rax, 60                 ; sys_exit
     mov rdi, 1                  ; Kod wyjścia: 0
     syscall
+
+
