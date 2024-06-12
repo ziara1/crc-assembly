@@ -225,6 +225,8 @@ _start:
     ; Zamknij plik
     mov rax, 3                  ; sys_close
     syscall
+    test rax, rax
+    js .error_exit
 
 .exit:
     xor rcx, rcx
@@ -255,6 +257,8 @@ _start:
     inc rdx
     mov rdx, rdx                ; liczba bajtów do wypisania 
     syscall
+    test rax, rax
+    js .error_exit
 
     ; kończy program
     mov rax, 60                 ; sys_exit
