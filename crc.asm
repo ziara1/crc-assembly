@@ -1,13 +1,6 @@
 %ifndef MACRO_PRINT_ASM
 %define MACRO_PRINT_ASM
 
-; Nie definiujemy tu żadnych stałych, żeby nie było konfliktu ze stałymi
-; zdefiniowanymi w pliku włączającym ten plik.
-
-; Wypisuje napis podany jako pierwszy argument, a potem szesnastkowo zawartość
-; rejestru podanego jako drugi argument i kończy znakiem nowej linii.
-; Nie modyfikuje zawartości żadnego rejestru ogólnego przeznaczenia ani rejestru
-; znaczników.
 %macro print 2
   jmp     %%begin
 %%descr: db %1
@@ -70,14 +63,14 @@
 
 section .bss
     buffer resb 4096            ; Bufor o rozmiarze 4096 bajtów
-    crc_poly resq 1             ; Miejsce na przekształcony wielomian CRC
-    length resw 1               ; Przechowuje długość fragmentu (2 bajty)
-    offset resd 1               ; Przechowuje przesunięcie fragmentu (4 bajty)
-    output resb 65 ; maksymalnie 64 bity + null terminator
+    crc_poly resq 1             ; przekształcony wielomian CRC
+    length resw 1               ; długość fragmentu (2 bajty)
+    offset resd 1               ; przesunięcie fragmentu (4 bajty)
+    output resb 65              ; maksymalnie 64 bity + null terminator
 
 section .data
-    crcTable times 256 dq 0     ; Tablica 256 elementów 64-bitowych wypełniona zerami
-    dlugoscwyniku db 0
+    crcTable times 256 dq 0     ; tablica 256 elementów 64-bitowych 
+    dlugoscwyniku db 0          ; dlugosc ostatecznego wyniku
 
 
 section .text
@@ -95,20 +88,20 @@ _start:
     test rdx, rdx
     jz error_exit
 
-    ; Konwertuj wielomian CRC do liczby
-    mov rbx, rdx                ; Ustaw wskaźnik na początek łańcucha
-    xor rax, rax                ; Wyczyść rax (miejsce na wynik)
-    xor rcx, rcx                ; Wyczyść rcx (do przesunięć)
+                                ; konwertuje wielomian CRC do liczby
+    mov rbx, rdx                ; ustawia wskaźnik na początek stringa
+    xor rax, rax                ; miejsce na wynik
+    xor rcx, rcx                ; do przesunięć
 
 convert_loop:
     mov dl, byte [rbx]
     test dl, dl
-    jz conversion_done          ; Koniec łańcucha
+    jz conversion_done          ; koniec stringa
     sub dl, '0'
-    jb error_exit               ; Niepoprawny znak
+    jb error_exit               ; niepoprawny znak
     cmp dl, 1
-    ja error_exit               ; Niepoprawny znak
-    shl rax, 1                  ; Przesuń wynik w lewo o 1 bit
+    ja error_exit               ; niepoprawny znak
+    shl rax, 1                  ; przesuwa wynik w lewo o 1 bit
     or rax, rdx
     inc rbx
     inc cl
@@ -120,30 +113,30 @@ conversion_done:
     sub rbx, rcx
     mov cl, bl
     shl rax, cl
-    mov [crc_poly], rax         ; Zapisz wielomian do zmiennej
+    mov [crc_poly], rax         ; zapisuje wielomian do zmiennej
 
 
 crcInit:
     mov rcx, [rel crc_poly]     ; wielomian crc
     mov r8, 0x8000000000000000
 
-    ; Dla każdego możliwego dividend (0-255)
-    xor rdi, rdi                ; dividend = 0
+    ; Dla każdego możliwego dzielnika (0-255)
+    xor rdi, rdi                ; dzielnik = 0
 
 crcLoop:
-    mov eax, edi                ; eax = dividend (tylko dolne 32 bity nas interesują)
-    shl rax, 56                 ; remainder = dividend << (WIDTH - 8)
-    mov rbx, rax                ; Przenieś remainder do rbx
+    mov eax, edi                ; eax = dzielnik tylko dolne 32 bity są ważne
+    shl rax, 56                 ; remainder = dzielnik << (WIDTH - 8)
+    mov rbx, rax                ; przenieś remainder do rbx
     mov rdx, 8
 
     ; Dla każdego bitu (od 8 do 0)
 bitLoop:
-    test rbx, r8                ; Sprawdź, czy TOPBIT jest ustawiony
+    test rbx, r8                ; sprawdź, czy TOPBIT jest ustawiony
     jz noDivision
 
     ; Jeśli TOPBIT jest ustawiony
     shl rbx, 1                  ; remainder = remainder << 1
-    xor rbx, rcx                ; remainder = remainder ^ POLYNOMIAL
+    xor rbx, rcx                ; remainder = remainder ^ wielomian
     jmp nextBit
 
 noDivision:
@@ -155,63 +148,63 @@ nextBit:
     jnz bitLoop
 
     ; Przechowaj wynik w crcTable
-    mov [crcTable + rdi*8], rbx ; crcTable[dividend] = remainder
+    mov [crcTable + rdi*8], rbx ; crcTable[dzielnik] = remainder
 
     ; Następny dividend
-    inc edi                     ; dividend++
-    cmp edi, 256                ; Sprawdź, czy dividend < 256
+    inc edi                     ; dzielnik++
+    cmp edi, 256                ; sprawdź, czy dzielnik < 256
     jl crcLoop
 
 
     ; Otwórz plik
     mov rax, 2                  ; sys_open
-    mov rdi, rsi                ; Nazwa pliku
+    mov rdi, rsi                ; nazwa pliku
     mov rsi, 0                  ; Oflag: O_RDONLY
     syscall
     test rax, rax
     js error_exit
-    mov rdi, rax                ; Zapisz deskryptor pliku
+    mov rdi, rax                ; zapisuje deskryptor pliku
 
     xor r9, r9
 
 read_fragment:
     ; Wczytaj 2 bajty długości fragmentu
     mov rax, 0                  ; sys_read
-    mov rsi, length             ; Bufor na długość fragmentu (2 bajty)
-    mov rdx, 2                  ; Wczytaj 2 bajty
+    mov rsi, length             ; bufor na długość fragmentu (2 bajty)
+    mov rdx, 2                  ; wczytuje 2 bajty
     syscall
     test rax, rax
-    js error_exit               ; Wystąpił błąd
+    js error_exit               ; wystąpił błąd
     test rax, rax
-    jz error_exit               ; Koniec pliku
+    jz error_exit               ; koniec pliku
 
     ; Przetwórz długość fragmentu (little-endian)
-    movzx r8, word [length]     ; Przechowuje długość fragmentu w r8
+    movzx r8, word [length]     ; przechowuje długość fragmentu w r8
 
 
 process_data:
     ; Sprawdź, czy długość fragmentu jest większa niż bufor
 
     cmp r8, 4096
-    jbe .read_data              ; Jeśli długość <= 4096, wczytaj dane
+    jbe .read_data              ; jeśli długość <= 4096, wczytaj dane
     ; Wczytuj dane w partiach po 4096 bajtów
 .read_chunk:
 
     mov rax, 0                  ; sys_read
-    mov rsi, buffer             ; Bufor 4096 bajtowy
-    mov rdx, 4096               ; Wczytaj 4096 bajtów
+    mov rsi, buffer             ; bufor 4096 bajtowy
+    mov rdx, 4096               ; wczytaj 4096 bajtów
     syscall
     test rax, rax
-    js error_exit               ; Wystąpił błąd
+    js error_exit               ; wystąpił błąd
     test rax, rax
-    jz error_exit               ; Koniec pliku
+    jz error_exit               ; koniec pliku
 
     xor rbx, rbx
 .crc_loop1:
 
     cmp rbx, rax
     jge .done1
-    movzx r10, byte [rsi + rbx]   ; Załaduj message[byte] do r10, rozszerzając do 64 bitów
+    movzx r10, byte [rsi + rbx] ; Załaduj message[byte] do r10, rozszerzając do 64 bitów
     mov r11, r9                 ; Przenieś remainder do r11
     shr r11, 56                 ; Przesuń remainder w prawo o (64 - 8) bitów
     xor r10, r11                ; data = message[byte] ^ (remainder >> 56)
@@ -230,14 +223,14 @@ process_data:
 
 .read_data:
     mov rax, 0                  ; sys_read
-    mov rsi, buffer             ; Bufor 4096 bajtowy
-    mov rdx, r8                 ; Wczytaj pozostałe dane fragmentu
+    mov rsi, buffer             ; bufor 4096 bajtowy
+    mov rdx, r8                 ; wczytuje pozostałe dane fragmentu
 
     syscall
     test rax, rax
-    js error_exit               ; Wystąpił błąd
+    js error_exit               ; wystąpił błąd
     test rax, rax
-    jz error_exit               ; Koniec pliku
+    jz error_exit               ; koniec pliku
 
     xor rbx, rbx
 .crc_loop2:
