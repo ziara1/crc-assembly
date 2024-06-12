@@ -142,23 +142,9 @@ _start:
     jz .error_exit              ; koniec pliku
 
     xor rbx, rbx
-.crc_loop1:
-    ; przetworzenie "danych" danego fragmentu
-    cmp rbx, rax
-    jge .done1
-    movzx r10, byte [rsi + rbx] ; ładuje message[byte] do r10, rozszerza do 64 bitów
-    mov r11, r9                 ; przenosi remainder do r11
-    shr r11, 56                 ; przesuwa remainder w prawo o (64 - 8) bitów
-    xor r10, r11                ; data = message[byte] ^ (remainder >> 56)
 
-    ; remainder = crcTable[data] ^ (remainder << 8);
-    mov r11, [crcTable + 8*r10] ; ładuje crcTable[data] do r11, rozszerzając do 64 bitów
-    shl r9, 8                   ; przesuwa remainder w lewo o 8 bitów
-    xor r9, r11                 ; remainder = crcTable[data] ^ (remainder << 8)
-    inc rbx                     ; zwiększa indeks (byte)
-    jmp .crc_loop1              ; przechodzi do następnego bajtu
+    call .crc_loop
 
-.done1:
     sub r8, rax                 ; zmniejsza pozostałą długość fragmentu
     jmp .process_data           ; kontynuuje przetwarzanie danych
 
@@ -174,23 +160,8 @@ _start:
     jz .error_exit              ; koniec pliku
 
     xor rbx, rbx
-.crc_loop2:
-    ; przetworzenie ostatniej partii "danych" danego fragmentu
-    cmp rbx, rax
-    jge .done2
-    movzx r10, byte [rsi + rbx] ; ładuje message[byte] do r10, rozszerza do 64 bitów
-    mov r11, r9                 ; przenosi remainder do r11
-    shr r11, 56                 ; przesuwa remainder w prawo o (64 - 8) bitów
-    xor r10, r11                ; data = message[byte] ^ (remainder >> 56)
 
-    ; remainder = crcTable[data] ^ (remainder << 8);
-    mov r11, [crcTable + 8*r10] ; ładuje crcTable[data] do r11, rozszerza do 64 bitów
-    shl r9, 8                   ; przesuwa remainder w lewo o 8 bitów
-    xor r9, r11                 ; remainder = crcTable[data] ^ (remainder << 8)
-    inc rbx                     ; zwiększa indeks (byte)
-    jmp .crc_loop2              ; przechodzi do następnego bajtu
-
-.done2:
+    call .crc_loop
 
     ; Wczytaj 4 bajty przesunięcia fragmentu
     mov rax, 0                  ; sys_read
@@ -274,3 +245,22 @@ _start:
     mov rax, 60                 ; sys_exit
     mov rdi, 1                 
     syscall
+
+    .crc_loop:
+    ; przetworzenie "danych" danego fragmentu
+    cmp rbx, rax
+    jge .done_crc
+    movzx r10, byte [rsi + rbx] ; ładuje message[byte] do r10, rozszerza do 64 bitów
+    mov r11, r9                 ; przenosi remainder do r11
+    shr r11, 56                 ; przesuwa remainder w prawo o (64 - 8) bitów
+    xor r10, r11                ; data = message[byte] ^ (remainder >> 56)
+
+    ; remainder = crcTable[data] ^ (remainder << 8);
+    mov r11, [crcTable + 8*r10] ; ładuje crcTable[data] do r11, rozszerzając do 64 bitów
+    shl r9, 8                   ; przesuwa remainder w lewo o 8 bitów
+    xor r9, r11                 ; remainder = crcTable[data] ^ (remainder << 8)
+    inc rbx                     ; zwiększa indeks (byte)
+    jmp .crc_loop              ; przechodzi do następnego bajtu
+
+    .done_crc:
+    ret
