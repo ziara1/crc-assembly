@@ -88,32 +88,81 @@ _start:
     test rdx, rdx
     jz error_exit
 
-                                ; konwertuje wielomian CRC do liczby
-    mov rbx, rdx                ; ustawia wskaźnik na początek stringa
-    xor rax, rax                ; miejsce na wynik
-    xor rcx, rcx                ; do przesunięć
+
+
+
+;                                ; konwertuje wielomian CRC do liczby
+;    mov rbx, rdx                ; ustawia wskaźnik na początek stringa
+;    xor rax, rax                ; miejsce na wynik
+;    xor rcx, rcx                ; do przesunięć
+
+
+;convert_loop:
+;    mov dl, byte [rbx]
+;    test dl, dl
+;    jz conversion_done          ; koniec stringa
+;    sub dl, '0'
+;    jb error_exit               ; niepoprawny znak
+;    cmp dl, 1
+;    ja error_exit               ; niepoprawny znak
+;    shl rax, 1                  ; przesuwa wynik w lewo o 1 bit
+;    or rax, rdx
+;    inc rbx
+;    inc cl
+;    jmp convert_loop
+
+
+
+    xor rbx, rbx
+    xor rax, rax                ; wyzeruj rejestr rax, który będzie zawierał wynikowy ciąg binarny
+    mov rcx, 64                 ; licznik, maksymalnie 64 bity do przetworzenia
+    xor r8, r8
 
 convert_loop:
-    mov dl, byte [rbx]
-    test dl, dl
-    jz conversion_done          ; koniec stringa
-    sub dl, '0'
-    jb error_exit               ; niepoprawny znak
-    cmp dl, 1
-    ja error_exit               ; niepoprawny znak
-    shl rax, 1                  ; przesuwa wynik w lewo o 1 bit
-    or rax, rdx
-    inc rbx
-    inc cl
-    jmp convert_loop
+    test rcx, rcx               ; sprawdź czy licznik nie jest zerowy
+    jz done                     ; jeśli licznik jest zerowy, zakończ pętlę
+
+    mov bl, byte [rdx]          ; wczytaj bieżący znak ze wskaźnika rdx
+    test bl, bl                 ; sprawdź czy znak nie jest zerowy (null terminator)
+    jz done                     ; jeśli znak jest zerowy, zakończ pętlę
+
+    cmp bl, '0'                 ; porównaj znak z '0'
+    je is_zero
+    cmp bl, '1'                 ; porównaj znak z '1'
+    je is_one
+
+    jmp error_exit              ; jeśli znak nie jest ani '0', ani '1', skocz do error_exit
+
+is_zero:
+    shl rax, 1                  ; przesuń rax w lewo o 1 bit (dodaj 0 na końcu)
+    jmp next_char
+
+is_one:
+    shl rax, 1                  ; przesuń rax w lewo o 1 bit
+    or rax, 1                   ; ustaw najmłodszy bit na 1
+    jmp next_char
+
+next_char:
+    inc r8
+    inc rdx                     ; przejdź do następnego znaku
+    dec rcx                     ; zmniejsz licznik
+    jmp convert_loop            ; powtórz pętlę
+
+done:
+    ; rax zawiera wynikowy ciąg binarny
+    ; tutaj możesz umieścić kod kończący program, np. wywołanie systemowe exit
+    ;print "wielomian przed ", rax
+    ;print "rcx ", rcx ;= 64 - dlugosc
+    ;print "r8 ", r8
+
+
 
 conversion_done:
-    mov rbx, 64
-    mov [dlugoscwyniku], cl
-    sub rbx, rcx
-    mov cl, bl
+    mov [dlugoscwyniku], r8
+    ;print "wielomian przed ", rax
     shl rax, cl
     mov [crc_poly], rax         ; zapisuje wielomian do zmiennej
+    ;print "wielomian ", rax
 
 
 crcInit:
@@ -180,7 +229,7 @@ read_fragment:
 
     ; Przetwórz długość fragmentu (little-endian)
     movzx r8, word [length]     ; przechowuje długość fragmentu w r8
-
+    ;print "dlugosc fragmentu ", r8
 
 process_data:
     ; Sprawdź, czy długość fragmentu jest większa niż bufor
@@ -205,6 +254,7 @@ process_data:
     cmp rbx, rax
     jge .done1
     movzx r10, byte [rsi + rbx] ; Załaduj message[byte] do r10, rozszerzając do 64 bitów
+    ;print "bajt ", r10
     mov r11, r9                 ; Przenieś remainder do r11
     shr r11, 56                 ; Przesuń remainder w prawo o (64 - 8) bitów
     xor r10, r11                ; data = message[byte] ^ (remainder >> 56)
@@ -237,19 +287,17 @@ process_data:
     cmp rbx, rax
     jge .done2
     movzx r10, byte [rsi + rbx] ; Załaduj message[byte] do r10, rozszerzając do 64 bitów
+    ;print "2bajt ", r10
     mov r11, r9                 ; Przenieś remainder do r11
     shr r11, 56                 ; Przesuń remainder w prawo o (64 - 8) bitów
     xor r10, r11                ; data = message[byte] ^ (remainder >> 56)
 
-
     ; remainder = crcTable[data] ^ (remainder << 8);
     mov r11, [crcTable + 8*r10] ; Załaduj crcTable[data] do r11, rozszerzając do 64 bitów
-
     shl r9, 8                   ; Przesuń remainder w lewo o 8 bitów
     xor r9, r11                 ; remainder = crcTable[data] ^ (remainder << 8)
 
     inc rbx                     ; Zwiększ indeks (byte)
-
     jmp .crc_loop2              ; Przejdź do następnego bajtu
 
 .done2:
@@ -267,6 +315,7 @@ process_data:
 
 ; Przetwórz przesunięcie fragmentu (little-endian, signed)
     movsxd rax, dword [offset]  ; Przenosi i rozszerza znak 32-bitowego offsetu do 64-bitowego rejestru
+    ;print "ofset ", rax
 
     ; Sprawdź, czy przesunięcie wskazuje na początek fragmentu
     movzx r8, word [length]     ; Przechowuje długość fragmentu w r8
